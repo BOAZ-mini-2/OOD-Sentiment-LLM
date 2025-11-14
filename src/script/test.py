@@ -1,3 +1,4 @@
+# 지수가 그냥 혼자 짜본 draft인데 미프 회의하면서 또 구조가 바뀌어서,,, 그냥 참고용으로 유지해놓을게요
 
 import os, random, math
 import numpy as np
