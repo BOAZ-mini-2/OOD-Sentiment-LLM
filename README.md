@@ -20,7 +20,7 @@ file_names = [
 OOD-Sentiment-LLM/
 ├─ ood_scoring/
 │  ├─ __init__.py
-│  └─ scoring.py
-└─ examples/
-   └─ demo_fake_data.py   # 윤혁 test file
+│  ├─ scoring.py
+│  └─ examples/
+│     └─ demo_fake_data.py   # 윤혁 test file
 ```
