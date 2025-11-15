@@ -18,7 +18,7 @@ file_names = [
 ]
 ```
 
-### Scoring method
+### Scoring method (MSP / E / MD)
 ```python
 OOD-Sentiment-LLM/
 ├─ ood_scoring/
@@ -30,7 +30,6 @@ OOD-Sentiment-LLM/
 ```python
 # test code
 # python -m ood_scoring.examples.demo_fake_data
-
 
 from ood_scoring import (
     score_msp,
