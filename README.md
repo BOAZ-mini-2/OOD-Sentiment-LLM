@@ -10,3 +10,11 @@
 `src/dataset/Baby_Products.jsonl_25k.jsonl`
 `src/dataset/Grocery_and_Gourmet_Food.jsonl_25k.jsonl`
 `src/dataset/Industrial_and_Scientific.jsonl_25k.jsonl`
+
+```python
+file_names = [
+    "src/dataset/All_Beauty.jsonl_25k.jsonl",
+    "src/dataset/Baby_Products.jsonl_25k.jsonl",
+    "src/dataset/Grocery_and_Gourmet_Food.jsonl_25k.jsonl",
+    "src/dataset/Industrial_and_Scientific.jsonl_25k.jsonl"
+]
