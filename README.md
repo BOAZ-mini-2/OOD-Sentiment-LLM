@@ -20,17 +20,17 @@ file_names = [
 
 ### Scoring method
 ```python
-# test code
-# python -m ood_scoring.examples.demo_fake_data
-
-'''
 OOD-Sentiment-LLM/
 ├─ ood_scoring/
 │  ├─ __init__.py
 │  ├─ scoring.py
 │  └─ examples/
 │     └─ demo_fake_data.py   # 윤혁 test file
-'''
+```
+```python
+# test code
+# python -m ood_scoring.examples.demo_fake_data
+
 
 from ood_scoring import (
     score_msp,
