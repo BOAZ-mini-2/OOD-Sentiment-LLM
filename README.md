@@ -18,12 +18,29 @@ file_names = [
 ]
 ```
 
-### scoring method
+### Scoring method
 ```python
+# test code
+# python -m ood_scoring.examples.demo_fake_data
+
+'''
 OOD-Sentiment-LLM/
 ├─ ood_scoring/
 │  ├─ __init__.py
 │  ├─ scoring.py
 │  └─ examples/
 │     └─ demo_fake_data.py   # 윤혁 test file
+'''
+
+from ood_scoring import (
+    score_msp,
+    score_energy_from_probs,
+    fit_md,
+    score_md
+)
+
+msp = score_msp(probs)
+energy = score_energy_from_probs(probs)
+mu, inv_cov = fit_md(train_feats)
+md_scores = score_md(test_feats, mu, inv_cov)
 ```
