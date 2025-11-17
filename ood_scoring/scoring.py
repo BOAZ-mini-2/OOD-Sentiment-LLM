@@ -1,5 +1,5 @@
 # ood_scoring/scoring.py
-''''
+'''
 from ood_scoring.scoring import (
     score_msp,
     score_energy_from_probs,
