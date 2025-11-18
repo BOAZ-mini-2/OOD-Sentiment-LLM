@@ -20,9 +20,9 @@ file_names = [
 
 ### Scoring method (MSP / E / MD)
 
-$score_{MSP}(x) = 1 - \max_{y \in \mathcal{Y}} p(y \mid x)$\n
-$score_{E}(x) = -T \times \log\left[\sum_{y \in \mathcal{Y}}\exp\left(\frac{p(y \mid x)}{T}\right)\right]$\n
-$score_{MD}(x, D_{tr}) = \sqrt{(x - \mu)^\top\Sigma^{-1}(x - \mu)}$
+* $score_{MSP}(x) = 1 - \max_{y \in \mathcal{Y}} p(y \mid x)$
+* $score_{E}(x) = -T \times \log\left[\sum_{y \in \mathcal{Y}}\exp\left(\frac{p(y \mid x)}{T}\right)\right]$
+* $score_{MD}(x, D_{tr}) = \sqrt{(x - \mu)^\top\Sigma^{-1}(x - \mu)}$
 
 ```python
 OOD-Sentiment-LLM/
