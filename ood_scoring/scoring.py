@@ -43,7 +43,7 @@ def score_energy_from_probs(probs: np.ndarray, T: float = 1.0) -> np.ndarray:
     -> Temperature (default 1.0)
 
     ouput :
-    -> scores = T * np.log(sum_exp + 1e-12)
+    -> scores = -T * np.log(sum_exp + 1e-12)
     -> shape (N,)
     -> 클수록 OOD
     '''
@@ -55,7 +55,7 @@ def score_energy_from_probs(probs: np.ndarray, T: float = 1.0) -> np.ndarray:
     scaled = probs / T
     exp_scaled = np.exp(scaled)
     sum_exp = exp_scaled.sum(axis=1)
-    scores = T * np.log(sum_exp + 1e-12)
+    scores = -T * np.log(sum_exp + 1e-12)
     return scores
 
 def score_energy_from_logits(logits: np.ndarray, T: float = 1.0) -> np.ndarray:
@@ -70,7 +70,7 @@ def score_energy_from_logits(logits: np.ndarray, T: float = 1.0) -> np.ndarray:
     exp_scaled = np.exp(scaled - max_scaled)
     sum_exp = exp_scaled.sum(axis=1)
     log_sum_exp = max_scaled.squeeze(axis=1) + np.log(sum_exp + 1e-12)
-    scores = T * log_sum_exp
+    scores = -T * log_sum_exp
     return scores
 
 ## 3. MD-based OOD score
@@ -108,9 +108,9 @@ def score_md(feats: np.ndarray, mu: np.ndarray, inv_cov: np.ndarray) -> np.ndarr
     -> test에서 추출된 features, 평균, 역공분산
 
     output :
-    -> scores = -np.sqrt(d_squared)
+    -> scores = np.sqrt(d_squared)
     -> Mahalanobis distance 값
-    -> 작을수록 OOD
+    -> 클수록 OOD
     '''
     if feats.ndim != 2:
         raise ValueError(f"`feats` must be 2D (N, D), got shape {feats.shape}")
@@ -123,5 +123,5 @@ def score_md(feats: np.ndarray, mu: np.ndarray, inv_cov: np.ndarray) -> np.ndarr
     left = diff @ inv_cov
     d_squared = np.sum(left * diff, axis=1)
     d_squared = np.maximum(d_squared, 0.0)
-    scores = -np.sqrt(d_squared)
+    scores = np.sqrt(d_squared)
     return scores
