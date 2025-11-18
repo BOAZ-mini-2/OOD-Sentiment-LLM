@@ -30,6 +30,7 @@ file_names = [
 <p align="left">
   $$score_{MD}(x, D_{tr}) = \sqrt{(x - \mu)^\top\Sigma^{-1}(x - \mu)}$$
 </p>
+
 ```python
 OOD-Sentiment-LLM/
 ├─ ood_scoring/
