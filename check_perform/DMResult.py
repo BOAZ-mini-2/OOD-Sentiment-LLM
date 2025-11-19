@@ -68,7 +68,6 @@ class DMResult:
         return self
 
     def summary(self):
-        print("=== DMResult Summary ===")
         print(f"AUROC : {self.auroc:.4f}")
         print(f"AUPR  : {self.aupr:.4f}")
         print(f"FPR95 : {self.fpr95:.4f}")
