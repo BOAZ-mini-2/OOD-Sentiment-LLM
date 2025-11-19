@@ -34,7 +34,7 @@ $score_{E}(x) = -T \times \log\left[\sum_{y \in \mathcal{Y}}\exp\left(\frac{p(y 
 <br>
 $score_{MD}(x, D_{tr}) = \sqrt{(x - \mu)^\top\Sigma^{-1}(x - \mu)}$<br>
 <br>
-** → Higher scores mean OOD.**
+**→ Higher scores mean OOD.**
 ```python
 # test code
 # python -m ood_scoring.examples.demo_fake_data
