@@ -54,9 +54,9 @@ md_scores = score_md(test_feats, mu, inv_cov)
 ```
 
 ### Scoring method (MSP / E / MD)
-**AUROC (Area Under ROC Curve)** → Higher is better.
-**AUPR (Area Under Precision-Recall Curve)** → Higher is better.
-**FPR95 (False Positive Rate @ 95% TPR)** → Lower is better.
+**- AUROC (Area Under ROC Curve)** → Higher is better.<br>
+**- AUPR (Area Under Precision-Recall Curve)** → Higher is better.<br>
+**- FPR95 (False Positive Rate @ 95% TPR)** → Lower is better.<br>
 ```python
 OOD-Sentiment-LLM/
 ├─ check_perform/
