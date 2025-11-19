@@ -1,4 +1,5 @@
 # ood_scoring/examples/demo_fake_data.py
+print(">>> THIS IS MY EDITED demo_fake_data.py <<<")
 
 import numpy as np
 from ood_scoring.scoring import (
