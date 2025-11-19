@@ -1,3 +1,9 @@
+'''
+본 코드는 우리 프로젝트 데이터셋과 비슷하게 꾸민 random sample을 이용해
+score를 구하고(from scoring) evaluate하는(from DMResult) 코드...
+코드 다 짠거
+GPT한테 뭉쳐달라해서 정리 XXX
+'''
 # ============================================================
 # demo_fake_data.py
 # Synthetic sentiment-like data + visualization + OOD scoring
