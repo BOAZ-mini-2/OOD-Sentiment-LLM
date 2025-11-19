@@ -79,11 +79,5 @@ def main():
     print("\n=== MD OOD metrics ===")
     dm_md.summary()
 
-
-if __name__ == "__main__":
-    main()
-
-
-
 if __name__ == "__main__":
     main()
