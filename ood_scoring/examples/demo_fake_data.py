@@ -37,6 +37,7 @@ def main():
     print("feats_train shape:", feats_train.shape)
     print("feats_test shape:", feats_test.shape)
 
+    # 3) post-hoc scoring
     # ===== MSP =====
     msp_scores = score_msp(probs_test)
     print("\nMSP scores shape:", msp_scores.shape)
@@ -52,6 +53,36 @@ def main():
     md_scores = score_md(feats_test, mu_md, inv_cov_md)
     print("\nMD scores shape:", md_scores.shape)
     print("MD scores example:", md_scores[:5])
+    
+    # 4) evaluate
+    # DMResult.py 가정:
+    #   y_true: 0 = IND, 1 = OOD
+    #   scores: 클수록 OOD-like
+
+    N_test = probs_test.shape[0]
+
+    rng = np.random.default_rng(0)
+    y_true = rng.integers(0, 2, size=N_test)   # 0 또는 1
+
+    # ===== MSP =====
+    dm_msp = DMResult()(y_true, msp_scores)
+    print("\n=== MSP OOD metrics ===")
+    dm_msp.summary()
+
+    # ===== E =====
+    dm_energy = DMResult()(y_true, energy_scores)
+    print("\n=== Energy OOD metrics ===")
+    dm_energy.summary()
+
+    # ===== MD     =====
+    dm_md = DMResult()(y_true, md_scores)
+    print("\n=== MD OOD metrics ===")
+    dm_md.summary()
+
+
+if __name__ == "__main__":
+    main()
+
 
 
 if __name__ == "__main__":
