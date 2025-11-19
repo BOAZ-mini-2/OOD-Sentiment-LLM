@@ -32,11 +32,13 @@ OOD-Sentiment-LLM/
 │  ├─ __init__.py
 │  ├─ scoring.py
 │  └─ examples/
-│     └─ demo_fake_data.py   # 윤혁 test file
+│     ├─ demo_fake_data.py   # test scoring
+│     └─ demo_2.py           # test scoring + eval metric
 ```
 ```python
 # test code
 # python -m ood_scoring.examples.demo_fake_data
+# python -m ood_scoring.examples.demo_2
 
 from ood_scoring import (
     score_msp,
