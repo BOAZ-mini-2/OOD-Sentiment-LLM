@@ -281,4 +281,7 @@ def main():
 # ============================================================
 
 if __name__ == "__main__":
+    import matplotlib
+    matplotlib.use("TkAgg")
     main()
+
