@@ -19,13 +19,6 @@ file_names = [
 ```
 
 ### Scoring method (MSP / E / MD)
-$score_{MSP}(x) = 1 - \max_{y \in \mathcal{Y}} p(y \mid x)$<br>
-<br>
-$score_{E}(x) = -T \times \log\left[\sum_{y \in \mathcal{Y}}\exp\left(\frac{p(y \mid x)}{T}\right)\right]$<br>
-<br>
-$score_{MD}(x, D_{tr}) = \sqrt{(x - \mu)^\top\Sigma^{-1}(x - \mu)}$<br>
-<br>
-** → Higher scores mean OOD.**
 ```python
 OOD-Sentiment-LLM/
 ├─ ood_scoring/
@@ -35,6 +28,13 @@ OOD-Sentiment-LLM/
 │     ├─ demo_fake_data.py   # test scoring
 │     └─ demo_2.py           # test scoring + eval metric
 ```
+$score_{MSP}(x) = 1 - \max_{y \in \mathcal{Y}} p(y \mid x)$<br>
+<br>
+$score_{E}(x) = -T \times \log\left[\sum_{y \in \mathcal{Y}}\exp\left(\frac{p(y \mid x)}{T}\right)\right]$<br>
+<br>
+$score_{MD}(x, D_{tr}) = \sqrt{(x - \mu)^\top\Sigma^{-1}(x - \mu)}$<br>
+<br>
+** → Higher scores mean OOD.**
 ```python
 # test code
 # python -m ood_scoring.examples.demo_fake_data
@@ -54,11 +54,11 @@ md_scores = score_md(test_feats, mu, inv_cov)
 ```
 
 ### Scoring method (MSP / E / MD)
-**- AUROC (Area Under ROC Curve)** → Higher is better.<br>
-**- AUPR (Area Under Precision-Recall Curve)** → Higher is better.<br>
-**- FPR95 (False Positive Rate @ 95% TPR)** → Lower is better.<br>
 ```python
 OOD-Sentiment-LLM/
 ├─ check_perform/
 │  └─ DMResult.py
 ```
+**- AUROC (Area Under ROC Curve)** → Higher is better.<br>
+**- AUPR (Area Under Precision-Recall Curve)** → Higher is better.<br>
+**- FPR95 (False Positive Rate @ 95% TPR)** → Lower is better.<br>
