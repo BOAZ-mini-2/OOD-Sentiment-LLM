@@ -8,6 +8,8 @@ from ood_scoring.scoring import (
     score_md,
 )
 
+from check_perform.DMResult import DMResult
+
 def main():
     np.random.seed(42)
 
