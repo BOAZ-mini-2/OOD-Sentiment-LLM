@@ -183,6 +183,49 @@ class OODEvaluator:
             raise RuntimeError("evaluate_all() 이후에 호출하세요.")
         self.dm_md.plot_pr("PR Curve (Mahalanobis)")
 
+    # =========================================================
+    # 5) ROC 기반 Best Measure 선택 + 그 measure의 Best Threshold 반환
+    # =========================================================
+    def get_best_measure_and_threshold(self):
+        """
+        Validation ROC 기준:
+        - MSP / Energy / MD 중 AUROC 가장 높은 measure 선택
+        - 선택된 measure에서 ROC 기반 Youden J로 best threshold 계산
+
+        return:
+            best_name (str), best_thr (float), best_auroc (float)
+        """
+        if any(dm is None for dm in [self.dm_msp, self.dm_energy, self.dm_md]):
+            raise RuntimeError("evaluate_all() 이후에 호출하세요.")
+
+        # AUROC 기준 비교
+        aurocs = {
+            "MSP":    self.dm_msp.auroc,
+            "Energy": self.dm_energy.auroc,
+            "MD":     self.dm_md.auroc
+        }
+
+        best_name = max(aurocs, key=aurocs.get)
+        best_auroc = aurocs[best_name]
+
+        # 각 DMResult 내에서 best threshold 직접 계산
+        if best_name == "MSP":
+            dm = self.dm_msp
+        elif best_name == "Energy":
+            dm = self.dm_energy
+        else:
+            dm = self.dm_md
+
+        # Youden J 기반 threshold 계산
+        fpr = dm.fpr
+        tpr = dm.tpr
+        thr = dm.thr
+
+        J = tpr - fpr
+        idx_best = np.argmax(J)
+        best_thr = float(thr[idx_best])
+
+        return best_name, best_thr
 
 
 
