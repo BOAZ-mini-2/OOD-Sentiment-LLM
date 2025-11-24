@@ -56,21 +56,6 @@ class DMResult:
         print(f"FPR95 : {self.fpr95:.4f}")
         print("========================")
 
-    # ------------------------------------------------------------
-    # ROC 기반 best threshold (Youden's J = TPR - FPR 최대)
-    # ------------------------------------------------------------
-    def get_trs(self):
-        """
-        Returns the ROC-based 'best' threshold using Youden's J:
-            J = TPR - FPR
-        The threshold corresponding to max(J) is returned.
-        """
-        if self.fpr.size == 0:
-            raise RuntimeError("Call DMResult(y_true, scores) before get_trs().")
-
-        J = self.tpr - self.fpr
-        idx_best = np.argmax(J)
-        return float(self.thr[idx_best])
 
     # ------------------------------------------------------------
     # ROC curve plot
