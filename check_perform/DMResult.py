@@ -1,9 +1,4 @@
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve, auc
-
-import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
     roc_curve, auc, average_precision_score,
@@ -42,7 +37,7 @@ class DMResult:
         # AUROC
         self.auroc = float(auc(self.fpr, self.tpr))
 
-        # FPR@target_tpr
+        # FPR@target_tpr (FPR95 용도는 그대로 유지)
         idx = np.where(self.tpr >= target_tpr)[0]
         self.fpr95 = float(self.fpr[idx[0]]) if len(idx) > 0 else 1.0
 
@@ -62,21 +57,20 @@ class DMResult:
         print("========================")
 
     # ------------------------------------------------------------
-    # (1) Threshold at TPR >= target_tpr   (ex: TPR=0.95)
+    # (1) ROC 기반 best threshold (Youden's J = TPR - FPR 최대)
     # ------------------------------------------------------------
-    def get_trs(self, target_tpr: float = 0.95):
+    def get_trs(self):
         """
-        Returns the threshold where TPR first reaches 'target_tpr'.
-        (Same threshold used for FPR95 when target_tpr=0.95)
+        Returns the ROC-based 'best' threshold using Youden's J:
+            J = TPR - FPR
+        The threshold corresponding to max(J) is returned.
         """
         if self.fpr.size == 0:
             raise RuntimeError("Call DMResult(y_true, scores) before get_trs().")
 
-        idx = np.where(self.tpr >= target_tpr)[0]
-        if len(idx) == 0:
-            return float(self.thr[-1])  # fallback: highest threshold
-
-        return float(self.thr[idx[0]])
+        J = self.tpr - self.fpr          # Youden's J
+        idx_best = np.argmax(J)
+        return float(self.thr[idx_best])
 
     # ------------------------------------------------------------
     # (2) ROC curve plot
@@ -114,4 +108,3 @@ class DMResult:
         plt.grid(alpha=0.2)
         plt.legend()
         plt.show()
-
