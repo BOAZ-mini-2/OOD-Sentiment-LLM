@@ -225,7 +225,7 @@ class OODEvaluator:
         idx_best = np.argmax(J)
         best_thr = float(thr[idx_best])
 
-        return best_name, best_thr
+        return best_name, best_thr, float(best_auroc)
 
 
 
