@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
     roc_curve, auc, average_precision_score,
-    precision_recall_curve
+    precision_recall_curve,
 )
 
 class DMResult:
@@ -37,14 +37,14 @@ class DMResult:
         # AUROC
         self.auroc = float(auc(self.fpr, self.tpr))
 
-        # FPR@target_tpr (FPR95 용도는 그대로 유지)
+        # FPR@target_tpr → FPR95용으로만 사용
         idx = np.where(self.tpr >= target_tpr)[0]
         self.fpr95 = float(self.fpr[idx[0]]) if len(idx) > 0 else 1.0
 
         # AUPR
         self.aupr = float(average_precision_score(y_true_arr, scores_arr))
 
-        # store for PR curve plotting
+        # PR curve용 저장
         self._y_true = y_true_arr
         self._scores = scores_arr
 
@@ -57,7 +57,7 @@ class DMResult:
         print("========================")
 
     # ------------------------------------------------------------
-    # (1) ROC 기반 best threshold (Youden's J = TPR - FPR 최대)
+    # ROC 기반 best threshold (Youden's J = TPR - FPR 최대)
     # ------------------------------------------------------------
     def get_trs(self):
         """
@@ -68,12 +68,12 @@ class DMResult:
         if self.fpr.size == 0:
             raise RuntimeError("Call DMResult(y_true, scores) before get_trs().")
 
-        J = self.tpr - self.fpr          # Youden's J
+        J = self.tpr - self.fpr
         idx_best = np.argmax(J)
         return float(self.thr[idx_best])
 
     # ------------------------------------------------------------
-    # (2) ROC curve plot
+    # ROC curve plot
     # ------------------------------------------------------------
     def plot_roc(self, title="ROC Curve"):
         if self.fpr.size == 0:
@@ -91,7 +91,7 @@ class DMResult:
         plt.show()
 
     # ------------------------------------------------------------
-    # (3) Precision-Recall curve plot
+    # Precision-Recall curve plot
     # ------------------------------------------------------------
     def plot_pr(self, title="Precision-Recall Curve"):
         if not hasattr(self, "_y_true"):
