@@ -1,5 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics import (
+    roc_curve, auc, confusion_matrix, balanced_accuracy_score,
+    precision_recall_curve, average_precision_score
+)
 
 from ood_scoring.scoring import (
     score_msp,
@@ -8,6 +12,7 @@ from ood_scoring.scoring import (
     score_md,
 )
 from check_perform.DMResult import DMResult
+
 
 
 class OODEvaluator:
@@ -210,3 +215,95 @@ class OODEvaluator:
             best_thr = self.dm_md.get_trs(target_tpr)
 
         return best_name, best_thr, best_fpr
+
+
+
+def test_ood_detection(
+    X_test,
+    y_test,
+    probs_test,
+    best_name: str,
+    best_thr: float,
+    T: float = 1.0,
+    reg_eps: float = 1e-5,
+):
+    """
+    테스트 셋에서 OOD 성능 평가 (threshold는 validation에서 가져온 값 사용)
+
+    Parameters
+    ----------
+    X_test : np.ndarray, shape (N, D)
+        테스트 임베딩
+    y_test : array-like, shape (N,)
+        0 = IND, 1 = OOD
+    probs_test : np.ndarray, shape (N, 2)
+        테스트 softmax 확률
+    best_name : {"MSP", "Energy", "MD"}
+        validation 단계에서 선택된 best measure 이름
+    best_thr : float
+        validation 단계에서 해당 measure 기준으로 뽑은 threshold
+    T : float, default=1.0
+        Energy score 계산에 사용하는 온도
+    reg_eps : float, default=1e-5
+        MD 계산 시 covariance regularization
+
+    Returns
+    -------
+    None
+        성능을 보기 좋게 print만 함.
+    """
+
+    best_name = best_name.upper()
+    y_test = np.asarray(y_test)
+    X_test = np.asarray(X_test)
+    probs_test = np.asarray(probs_test)
+
+    # ------------------------------------
+    # 1) measure에 맞는 score 재계산
+    # ------------------------------------
+    if best_name == "MSP":
+        scores = score_msp(probs_test)
+
+    elif best_name == "ENERGY":
+        scores = score_energy_from_probs(probs_test, T=T)
+
+    elif best_name == "MD":
+        # 테스트 IND만으로 MD fit (혹은 원래 train IND를 따로 넘기도록 바꿔도 됨)
+        X_IND_test = X_test[y_test == 0]
+        mu_md, inv_cov_md = fit_md(X_IND_test, reg_eps=reg_eps)
+        scores = score_md(X_test, mu_md, inv_cov_md)
+
+    else:
+        raise ValueError("best_name 은 'MSP', 'Energy', 'MD' 중 하나여야 합니다.")
+
+    # ------------------------------------
+    # 2) threshold 적용 → 예측 라벨
+    # ------------------------------------
+    y_pred = (scores >= best_thr).astype(int)   # 1 = OOD, 0 = IND
+
+    # ------------------------------------
+    # 3) 혼동행렬 기반 지표
+    # ------------------------------------
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+
+    TPR = tp / (tp + fn + 1e-12)   # OOD recall
+    TNR = tn / (tn + fp + 1e-12)   # IND recall
+    bal_acc = (TPR + TNR) / 2
+
+    # ------------------------------------
+    # 4) AUPR (threshold-free)
+    # ------------------------------------
+    aupr = average_precision_score(y_test, scores)
+
+    # ------------------------------------
+    # 5) 출력
+    # ------------------------------------
+    print("\n========================================")
+    print(f"  Test OOD Detection Performance ({best_name})")
+    print("========================================")
+    print(f"Threshold (from validation): {best_thr:.6f}\n")
+    print(f"TPR (Recall OOD) : {TPR:.4f}")
+    print(f"TNR (Recall IND) : {TNR:.4f}")
+    print(f"Balanced Accuracy: {bal_acc:.4f}")
+    print(f"AUPR             : {aupr:.4f}")
+    print("========================================\n")
