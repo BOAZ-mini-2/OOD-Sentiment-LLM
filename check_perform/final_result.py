@@ -133,6 +133,7 @@ class OODEvaluator:
         """
         DMResult 3개(MSP, Energy, MD)를 계산해서 저장.
         compute_scores()가 먼저 호출되어 있어야 함.
+        target_tpr는 FPR@target_tpr (예: FPR95) 계산용으로만 쓰임.
         """
         if self.msp_scores is None or self.energy_scores is None or self.md_scores is None:
             raise RuntimeError("compute_scores()를 먼저 호출하세요.")
@@ -182,39 +183,6 @@ class OODEvaluator:
             raise RuntimeError("evaluate_all() 이후에 호출하세요.")
         self.dm_md.plot_pr("PR Curve (Mahalanobis)")
 
-    # =========================================================
-    # 5) FPR95 기준 best measure + threshold 반환
-    #    (지금은 DMResult의 fpr95/get_trs 기준 그대로 사용)
-    # =========================================================
-    def get_best_by_fpr95(self, target_tpr: float = 0.95):
-        """
-        DMResult의 fpr95를 비교해서
-        FPR95가 가장 낮은 measure와 threshold를 반환한다.
-
-        return:
-            best_name, best_thr, best_fpr
-        """
-        if any(dm is None for dm in [self.dm_msp, self.dm_energy, self.dm_md]):
-            raise RuntimeError("evaluate_all() 이후에 호출하세요.")
-
-        fprs = {
-            "MSP":    self.dm_msp.fpr95,
-            "Energy": self.dm_energy.fpr95,
-            "MD":     self.dm_md.fpr95
-        }
-
-        best_name = min(fprs, key=fprs.get)
-        best_fpr = fprs[best_name]
-
-        # threshold는 DMResult.get_trs 기준 (TPR>=target_tpr)
-        if best_name == "MSP":
-            best_thr = self.dm_msp.get_trs(target_tpr)
-        elif best_name == "Energy":
-            best_thr = self.dm_energy.get_trs(target_tpr)
-        else:
-            best_thr = self.dm_md.get_trs(target_tpr)
-
-        return best_name, best_thr, best_fpr
 
 
 
