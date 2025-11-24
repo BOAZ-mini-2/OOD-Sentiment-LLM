@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List, Optional
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,15 +9,31 @@ from sklearn.metrics import (
 )
 
 # 0) 아티팩트 경로 자동 탐색 (src/artifacts → artifacts 순서)
-def find_artifact_dir() -> Path:
-    for cand in [Path("src/artifacts"), Path("artifacts")]:
-        if (cand / "embeddings_test_X.npy").exists() and (cand / "embeddings_test_Y.npy").exists():
+def find_artifact_dir(
+    candidates: Optional[List[Path]] = None,
+    required_files: Optional[List[str]] = None
+) -> Path:
+
+    # 기본 candidates (없으면 자동 설정)
+    if candidates is None:
+        candidates = [Path("src/artifacts"), Path("artifacts")]
+
+    # 기본 required files (없으면 자동 설정)
+    if required_files is None:
+        required_files = ["embeddings_test_X.npy", "embeddings_test_Y.npy"]
+
+    # 후보 경로들 순회
+    for cand in candidates:
+        if all((cand / fname).exists() for fname in required_files):
             return cand.resolve()
+
+    # 에러: 파일 못 찾음
     raise FileNotFoundError(
-        "테스트 임베딩 파일을 찾을 수 없습니다. 다음 폴더 중 한 곳에 두세요:\n"
-        " - src/artifacts\n - artifacts\n"
-        "필수 파일: embeddings_test_X.npy, embeddings_test_Y.npy"
+        "필수 파일을 찾을 수 없습니다.\n"
+        f"탐색한 폴더: {candidates}\n"
+        f"필수 파일: {required_files}"
     )
+
 
 # 1) 학습 때와 동일한 모델 정의
 class ProjectionHead(nn.Module):
@@ -117,3 +134,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
