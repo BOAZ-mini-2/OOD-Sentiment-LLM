@@ -236,8 +236,8 @@ def test_ood_detection(
     best_thr: float,
     T: float = 1.0,
     reg_eps: float = 1e-5,
-    mu_md: np.ndarrary, 
-    ind_cov: np.ndarrary
+    mu_md, 
+    ind_cov
 ):
     """
     테스트 셋에서 OOD 성능 평가 (threshold는 validation에서 가져온 값 사용)
