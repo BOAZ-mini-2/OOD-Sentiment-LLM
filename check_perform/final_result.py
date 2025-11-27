@@ -27,7 +27,7 @@ class OODEvaluator:
         self.y_val = np.asarray(y_val)
         self.probs_val = np.asarray(probs_val)
         self.mu_md = np.asarray(mu_md)
-        self.inv_cov = np.asarray(ind_cov)
+        self.ind_cov = np.asarray(ind_cov)
 
         # IND / OOD 분리
         self.X_IND = self.X_val[self.y_val == 0]
