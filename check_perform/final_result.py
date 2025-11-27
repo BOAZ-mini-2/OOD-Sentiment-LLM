@@ -22,7 +22,7 @@ class OODEvaluator:
     probs_val: softmax probs, shape (N, 2)
     """
 
-    def __init__(self, X_val: np.ndarray, y_val: np.ndarray, probs_val: np.ndarray, mu_md: np.ndarrary, ind_cov:np.ndarrary):
+    def __init__(self, X_val: np.ndarray, y_val: np.ndarray, probs_val: np.ndarray, mu_md: np.ndarrary, ind_cov: np.ndarrary):
         self.X_val = np.asarray(X_val)
         self.y_val = np.asarray(y_val)
         self.probs_val = np.asarray(probs_val)
@@ -236,6 +236,8 @@ def test_ood_detection(
     best_thr: float,
     T: float = 1.0,
     reg_eps: float = 1e-5,
+    mu_md: np.ndarrary, 
+    ind_cov: np.ndarrary
 ):
     """
     테스트 셋에서 OOD 성능 평가 (threshold는 validation에서 가져온 값 사용)
@@ -280,7 +282,7 @@ def test_ood_detection(
     elif best_name == "MD":
         # 테스트 IND만으로 MD fit (혹은 원래 train IND를 따로 넘기도록 바꿔도 됨)
         X_IND_test = X_test[y_test == 0]
-        mu_md, inv_cov_md = self.mu_md: np.ndarrary, self.ind_cov:np.ndarrary
+        mu_md, inv_cov_md = mu_md: np.ndarrary, ind_cov: np.ndarrary
         scores = score_md(X_test, mu_md, inv_cov_md)
 
     else:
