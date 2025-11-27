@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -230,6 +230,73 @@ def evaluate(model_proj: nn.Module, model_clf: nn.Module, loader: DataLoader) ->
     return correct / max(1, total)
 
 
+def export_md_params_from_trained_model(
+    X: np.ndarray,
+    ckpt_path: Union[str, Path],
+    out_path: Union[str, Path] = "md_params.pt",
+    proj_dim: int = 256,        # 학습할 때 사용한 proj_dim과 동일해야 함
+    batch_size: int = 512,
+    reg_eps: float = 1e-5,
+) -> None:
+    """
+    학습이 끝난 small NN(ProjectionHead)에 train X를 다시 통과시켜
+    Mahalanobis용 mu, inv_cov를 계산하고 파일로 저장하는 함수.
+    (로컬 파이썬 기준: 다운로드 없음, 파일 저장만 수행)
+    """
+    ckpt_path = Path(ckpt_path)
+    out_path = Path(out_path)
+
+    if X.ndim != 2:
+        raise ValueError(f"`X` must be 2D (N, in_dim), got shape {X.shape}")
+
+    in_dim = X.shape[1]
+
+    # 1) ProjectionHead 생성 후, 학습된 가중치 로드
+    model_proj = ProjectionHead(in_dim=in_dim, proj_dim=proj_dim).to(DEVICE)
+    ckpt = torch.load(ckpt_path, map_location=DEVICE)
+
+    if "proj" not in ckpt:
+        raise KeyError(f"`proj` key not found in checkpoint: {ckpt_path}")
+
+    model_proj.load_state_dict(ckpt["proj"])
+    model_proj.eval()
+
+    # 2) train X를 다시 통과시켜 f(x) 추출
+    feats_list = []
+    with torch.no_grad():
+        for i in range(0, X.shape[0], batch_size):
+            xb = torch.from_numpy(X[i:i + batch_size]).to(DEVICE)
+            fx = model_proj(xb)           # (B, proj_dim)
+            feats_list.append(fx.cpu().numpy())
+
+    feats_train = np.vstack(feats_list)   # (N_train, proj_dim)
+
+    # 3) mu, cov(+정규화), inv_cov 계산
+    mu = feats_train.mean(axis=0)                     # (D,)
+    cov = np.cov(feats_train, rowvar=False)          # (D, D)
+
+    if reg_eps is not None and reg_eps > 0:
+        cov = cov + reg_eps * np.eye(cov.shape[0], dtype=cov.dtype)
+
+    inv_cov = np.linalg.pinv(cov)                    # (D, D)
+
+    # 4) dict로 묶어서 .pt로 저장
+    md_params = {
+        "mu": mu,
+        "inv_cov": inv_cov,
+        "reg_eps": reg_eps,
+        "proj_dim": proj_dim,
+    }
+
+    torch.save(md_params, out_path)
+
+    print(f"[export_md_params] Saved mu & inv_cov to local file: {out_path}")
+    print(f"  - mu shape      : {mu.shape}")
+    print(f"  - inv_cov shape : {inv_cov.shape}")
+    print(f"  - reg_eps       : {reg_eps}")
+
+
+
 # =========================
 # 메인
 # =========================
@@ -277,8 +344,27 @@ def main():
         artifact_dir=ART
     )
 
+
     print("완료 ✅  (학습된 best_pn_classifier.pt 저장)")
 
 
 if __name__ == "__main__":
+    
     main()
+    ART = find_artifact_dir()
+
+    # 1) 임베딩 로드 (Train: PN만)
+    X = np.load(ART / "embeddings_train_X.npy")  # (N, D)
+    y = np.load(ART / "embeddings_train_y.npy")  # (N,)
+
+    # 2) Train/Val 분할 (PN 내부 분할)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.15, random_state=42, stratify=y
+    )
+    
+    export_md_params_from_trained_model(
+    X=X_train, 
+    ckpt_path="best_pn_classifier.pt",
+    out_path="md_params.pt",
+    proj_dim=256
+    )
