@@ -8,7 +8,6 @@ from sklearn.metrics import (
 from ood_scoring.scoring import (
     score_msp,
     score_energy_from_probs,
-    fit_md,
     score_md,
 )
 from check_perform.DMResult import DMResult
@@ -23,7 +22,7 @@ class OODEvaluator:
     probs_val: softmax probs, shape (N, 2)
     """
 
-    def __init__(self, X_val: np.ndarray, y_val: np.ndarray, probs_val: np.ndarray):
+    def __init__(self, X_val: np.ndarray, y_val: np.ndarray, probs_val: np.ndarray, mu_md: np.ndarrary, ind_cov:np.ndarrary):
         self.X_val = np.asarray(X_val)
         self.y_val = np.asarray(y_val)
         self.probs_val = np.asarray(probs_val)
@@ -126,7 +125,7 @@ class OODEvaluator:
         self.energy_scores = score_energy_from_probs(self.probs_val, T=T)
 
         # MD: IND 만으로 fitting
-        mu_md, inv_cov_md = fit_md(self.X_IND, reg_eps=reg_eps)
+        mu_md, inv_cov_md = self.mu_md: np.ndarrary, self.ind_cov:np.ndarrary
         self.md_scores = score_md(self.X_val, mu_md, inv_cov_md)
 
     def evaluate_all(self, target_tpr: float = 0.95):
@@ -281,7 +280,7 @@ def test_ood_detection(
     elif best_name == "MD":
         # 테스트 IND만으로 MD fit (혹은 원래 train IND를 따로 넘기도록 바꿔도 됨)
         X_IND_test = X_test[y_test == 0]
-        mu_md, inv_cov_md = fit_md(X_IND_test, reg_eps=reg_eps)
+        mu_md, inv_cov_md = self.mu_md: np.ndarrary, self.ind_cov:np.ndarrary
         scores = score_md(X_test, mu_md, inv_cov_md)
 
     else:
