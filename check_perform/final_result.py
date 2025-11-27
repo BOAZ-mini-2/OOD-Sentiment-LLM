@@ -279,8 +279,11 @@ def test_ood_detection(
 
     best_name = best_name.upper()
     y_test = np.asarray(y_test)
-    X_test = np.asarray(X_test)
+    X_test = np.asarray(X_test_raw)
+    fX_test = np.asarray(X_test_proj)
     probs_test = np.asarray(probs_test)
+    mu_md = np.asarray(mu_md)
+    ind_cov = np.asarray(ind_cov)
 
     # ------------------------------------
     # 1) measure에 맞는 score 재계산
@@ -295,7 +298,7 @@ def test_ood_detection(
         # 테스트 IND만으로 MD fit (혹은 원래 train IND를 따로 넘기도록 바꿔도 됨)
         X_IND_test = X_test[y_test == 0]
         mu_md, ind_cov_md = mu_md, ind_cov
-        scores = score_md(X_test, mu_md, ind_cov_md)
+        scores = score_md(fX_test, mu_md, ind_cov_md)
 
     else:
         raise ValueError("best_name 은 'MSP', 'Energy', 'MD' 중 하나여야 합니다.")
