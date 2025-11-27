@@ -22,7 +22,7 @@ class OODEvaluator:
     probs_val: softmax probs, shape (N, 2)
     """
 
-    def __init__(self, X_val: np.ndarray, y_val: np.ndarray, probs_val: np.ndarray, mu_md: np.ndarrary, ind_cov: np.ndarrary):
+    def __init__(self, X_val: np.ndarray, y_val: np.ndarray, probs_val: np.ndarray, mu_md: np.ndarray, ind_cov: np.ndarray):
         self.X_val = np.asarray(X_val)
         self.y_val = np.asarray(y_val)
         self.probs_val = np.asarray(probs_val)
