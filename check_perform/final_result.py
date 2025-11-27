@@ -27,7 +27,7 @@ class OODEvaluator:
         self.y_val = np.asarray(y_val)
         self.probs_val = np.asarray(probs_val)
         self.mu_md = np.asarray(mu_md)
-        self.inv_cov = np.asarray(inv_cov)
+        self.inv_cov = np.asarray(ind_cov)
 
         # IND / OOD 분리
         self.X_IND = self.X_val[self.y_val == 0]
@@ -120,14 +120,15 @@ class OODEvaluator:
     # =========================================================
     # 3) Score 계산 + DMResult 평가
     # =========================================================
-    def compute_scores(self, T: float = 1.0, reg_eps: float = 1e-5):
+    def compute_scores(self, T: float = 1.0):
         """MSP, Energy, Mahalanobis score 계산 (값만 저장)"""
         # MSP, Energy
         self.msp_scores = score_msp(self.probs_val)
         self.energy_scores = score_energy_from_probs(self.probs_val, T=T)
 
         # MD: IND 만으로 fitting
-        mu_md = self.mu.md, inv_cov_md = self.ind_cov
+        mu_md = self.mu_md 
+        inv_cov_md = self.ind_cov
         self.md_scores = score_md(self.X_val, mu_md, inv_cov_md)
 
     def evaluate_all(self, target_tpr: float = 0.95):
