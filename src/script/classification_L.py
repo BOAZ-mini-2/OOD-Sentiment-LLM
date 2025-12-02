@@ -5,7 +5,6 @@ from typing import Tuple, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -17,13 +16,12 @@ LR = 1e-3
 
 # 손실 가중치(λ): Prototype Loss의 세기 (클수록 대표점으로 더 강하게 끌어당김)
 LAMBDA_PL = 4.0
-PROTO_EMA = 0.6
-
-GAMMA = 1.0   # 논문 식의 γ (온도/스케일 역할)
-
 
 # 프로토타입 EMA 계수(0~1): 클수록 과거값 유지, 작을수록 최근 배치 반영↑
 PROTO_EMA = 0.6
+
+# 논문 식의 γ (온도/스케일 역할)
+GAMMA = 1.0
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -41,7 +39,9 @@ def find_artifact_dir() -> Path:
     )
 
 
+# =========================
 # Dataset
+# =========================
 class EmbeddingDataset(Dataset):
     """
     - 고정 임베딩(LLM에서 미리 추출한 벡터)을 받아 학습
@@ -58,7 +58,9 @@ class EmbeddingDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 
-# 모델 정의: Projection + Classifier
+# =========================
+# 모델 정의: ProjectionHead
+# =========================
 class ProjectionHead(nn.Module):
     """
     - 입력 임베딩(예: 1536차원) -> 투영 공간(예: 256차원)으로 변환
@@ -84,18 +86,9 @@ class ProjectionHead(nn.Module):
         return z
 
 
-class ClassifierHead(nn.Module):
-    """
-    - f(x) -> 2 클래스 로짓 출력 (간단한 선형 분류기)
-    """
-    def __init__(self, proj_dim: int, num_classes: int = 2):
-        super().__init__()
-        self.fc = nn.Linear(proj_dim, num_classes)
-
-    def forward(self, fx):
-        return self.fc(fx)
-
-
+# =========================
+# Prototype-based logits
+# =========================
 def prototype_logits(
     fx: torch.Tensor,
     proto_neg: torch.Tensor,
@@ -124,7 +117,9 @@ def prototype_logits(
     return logits
 
 
+# =========================
 # Prototype Loss & EMA 갱신
+# =========================
 def prototype_loss(
     fx: torch.Tensor,
     y: torch.Tensor,
@@ -167,10 +162,11 @@ def update_prototypes_ema(
     return proto_neg, proto_pos
 
 
+# =========================
 # 학습/평가 루프
+# =========================
 def train_loop(
     model_proj: nn.Module,
-    model_clf: nn.Module,
     train_loader: DataLoader,
     val_loader: DataLoader,
     proto_neg: torch.Tensor,
@@ -178,14 +174,14 @@ def train_loop(
     artifact_dir: Path
 ):
     ce_criterion = nn.CrossEntropyLoss()
-    params = list(model_proj.parameters()) + list(model_clf.parameters())
+    # 이제 projection head만 학습
+    params = list(model_proj.parameters())
     optimizer = torch.optim.Adam(params, lr=LR)
 
     best_val_acc = -1.0
 
     for epoch in range(1, EPOCHS + 1):
         model_proj.train()
-        model_clf.train()
         running_ce, running_pl, running_acc = 0.0, 0.0, 0.0
         n_samples = 0
 
@@ -196,7 +192,7 @@ def train_loop(
             # 1) 투영
             fx = model_proj(X)  # (B, proj_dim)  # 내부에서 L2 정규화까지 수행
 
-            # 2) 분류 로짓
+            # 2) 분류 로짓 (prototype distance 기반)
             logits = prototype_logits(fx, proto_neg, proto_pos, gamma=GAMMA)
 
             # 3) 손실 계산 (CE + λ * PL)
@@ -229,7 +225,7 @@ def train_loop(
         epoch_acc = running_acc / n_samples
 
         # 검증
-        val_acc = evaluate(model_proj, model_clf, val_loader)
+        val_acc = evaluate(model_proj, val_loader, proto_neg, proto_pos)
 
         print(
             f"[Epoch {epoch}] "
@@ -244,7 +240,6 @@ def train_loop(
             torch.save(
                 {
                     "proj": model_proj.state_dict(),
-                    "clf":  model_clf.state_dict(),
                     "proto_neg": proto_neg.detach().cpu().numpy(),
                     "proto_pos": proto_pos.detach().cpu().numpy(),
                 },
@@ -256,21 +251,31 @@ def train_loop(
 
 
 @torch.no_grad()
-def evaluate(model_proj: nn.Module, model_clf: nn.Module, loader: DataLoader) -> float:
+def evaluate(
+    model_proj: nn.Module,
+    loader: DataLoader,
+    proto_neg: torch.Tensor,
+    proto_pos: torch.Tensor,
+) -> float:
     model_proj.eval()
-    model_clf.eval()
     total, correct = 0, 0
     for X, y in loader:
         X = X.to(DEVICE)
         y = y.to(DEVICE)
-        fx = model_proj(X)          # ProjectionHead 안에서 L2 정규화 포함
-        logits = model_clf(fx)
+        fx = model_proj(X)  # (B, proj_dim), L2 정규화 포함
+
+        # 프로토타입 거리 기반 로짓
+        logits = prototype_logits(fx, proto_neg, proto_pos, gamma=GAMMA)
+
         preds = logits.argmax(dim=1)
         correct += (preds == y).sum().item()
         total += X.size(0)
     return correct / max(1, total)
 
 
+# =========================
+# Mahalanobis용 mu / inv_cov export
+# =========================
 def export_md_params_from_trained_model(
     X: np.ndarray,
     ckpt_path: Union[str, Path],
@@ -337,7 +342,6 @@ def export_md_params_from_trained_model(
     print(f"  - reg_eps       : {reg_eps}")
 
 
-
 # =========================
 # 메인
 # =========================
@@ -369,7 +373,6 @@ def main():
 
     # 3) 모델 생성
     model_proj = ProjectionHead(in_dim=in_dim, proj_dim=proj_dim).to(DEVICE)
-    model_clf  = ClassifierHead(proj_dim=proj_dim, num_classes=2).to(DEVICE)
 
     # 4) 프로토타입 초기화
     proto_neg = torch.zeros(proj_dim, dtype=torch.float32, device=DEVICE, requires_grad=False)
@@ -377,7 +380,7 @@ def main():
 
     # 5) 학습 루프(CE + λ*PL, 스텝마다 프로토타입 EMA 갱신)
     train_loop(
-        model_proj, model_clf,
+        model_proj,
         train_loader, val_loader,
         proto_neg, proto_pos,
         artifact_dir=ART
@@ -387,22 +390,23 @@ def main():
 
 
 if __name__ == "__main__":
-    
+
+    # 1) 학습
     main()
+
+    # 2) Mahalanobis용 mu / inv_cov export
     ART = find_artifact_dir()
 
-    # 1) 임베딩 로드 (Train: PN만)
     X = np.load(ART / "embeddings_train_X.npy")  # (N, D)
     y = np.load(ART / "embeddings_train_y.npy")  # (N,)
 
-    # 2) Train/Val 분할 (PN 내부 분할)
     X_train, X_val, y_train, y_val = train_test_split(
         X, y, test_size=0.15, random_state=42, stratify=y
     )
-    
+
     export_md_params_from_trained_model(
-        X=X_train, 
-        ckpt_path="best_pn_classifier.pt",
-        out_path="md_params.pt",
+        X=X_train,
+        ckpt_path=ART / "best_pn_classifier.pt",
+        out_path=ART / "md_params.pt",
         proj_dim=256
     )
