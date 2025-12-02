@@ -8,130 +8,152 @@ from sklearn.metrics import (
     confusion_matrix, roc_auc_score, classification_report
 )
 
-# 0) 아티팩트 경로 자동 탐색 (src/artifacts → artifacts 순서)
+# ----------------------------------------
+# Config
+# ----------------------------------------
+GAMMA = 1.0
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+# ----------------------------------------
+# artifact dir finder
+# ----------------------------------------
 def find_artifact_dir(
     candidates: Optional[List[Path]] = None,
     required_files: Optional[List[str]] = None
 ) -> Path:
-
-    # 기본 candidates (없으면 자동 설정)
     if candidates is None:
         candidates = [Path("src/artifacts"), Path("artifacts")]
 
-    # 기본 required files (없으면 자동 설정)
     if required_files is None:
         required_files = ["embeddings_test_X.npy", "embeddings_test_Y.npy"]
 
-    # 후보 경로들 순회
     for cand in candidates:
         if all((cand / fname).exists() for fname in required_files):
             return cand.resolve()
 
-    # 에러: 파일 못 찾음
-    raise FileNotFoundError(
-        "필수 파일을 찾을 수 없습니다.\n"
-        f"탐색한 폴더: {candidates}\n"
-        f"필수 파일: {required_files}"
-    )
+    raise FileNotFoundError("필수 파일을 찾을 수 없음.")
 
 
-# 1) 학습 때와 동일한 모델 정의
+# ----------------------------------------
+# Projection Head (same as training)
+# ----------------------------------------
 class ProjectionHead(nn.Module):
     def __init__(self, in_dim: int, proj_dim: int = 256):
         super().__init__()
+        hidden_dim = 512
         self.net = nn.Sequential(
-            nn.Linear(in_dim, proj_dim),
+            nn.Linear(in_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, proj_dim),
             nn.ReLU(inplace=True),
             nn.Linear(proj_dim, proj_dim),
         )
-    def forward(self, x): return self.net(x)
 
-class ClassifierHead(nn.Module):
-    def __init__(self, proj_dim: int, num_classes: int = 2):
-        super().__init__()
-        self.fc = nn.Linear(proj_dim, num_classes)
-    def forward(self, fx): return self.fc(fx)
+    def forward(self, x):
+        z = self.net(x)
+        z = z / (z.norm(p=2, dim=1, keepdim=True) + 1e-12)
+        return z
 
+
+# ----------------------------------------
+# Prototype distance-based logits
+# ----------------------------------------
+def prototype_logits(fx, proto_neg, proto_pos, gamma=GAMMA):
+    diff_neg = fx - proto_neg.unsqueeze(0)
+    diff_pos = fx - proto_pos.unsqueeze(0)
+
+    dist_neg = (diff_neg ** 2).sum(dim=1)
+    dist_pos = (diff_pos ** 2).sum(dim=1)
+
+    logits = torch.stack([-gamma * dist_neg, -gamma * dist_pos], dim=1)
+    return logits
+
+
+# ----------------------------------------
+# Predict 함수 (ONLY Projection + Prototype)
+# ----------------------------------------
 @torch.no_grad()
-def predict(model_proj, model_clf, X: np.ndarray, device: str = "cpu"):
-    X_t = torch.from_numpy(X).to(device).float()
+def predict(model_proj, proto_neg, proto_pos, X: np.ndarray, device="cpu"):
+    X_t = torch.from_numpy(X).float().to(device)
+
     fx = model_proj(X_t)
-    logits = model_clf(fx)            # (N, 2)
+    logits = prototype_logits(fx, proto_neg, proto_pos, GAMMA)
     probs = torch.softmax(logits, dim=1).cpu().numpy()
+
     preds = probs.argmax(axis=1)
     return probs, preds
 
+
+# ----------------------------------------
+# MAIN
+# ----------------------------------------
 def main():
     ART = find_artifact_dir()
     print("Using artifacts at:", ART)
 
-    # 2) 테스트 임베딩 로드 (라벨 파일 이름: embeddings_test_Y.npy ← 대문자 Y)
-    #    y_test 값은 0(neg), 1(pos) 이어야 함
-    X_test = np.load(ART / "embeddings_test_X.npy")   # (N, D)
-    y_test = np.load(ART / "embeddings_test_Y.npy")   # (N,)
-    in_dim  = X_test.shape[1]
-    print(f"Loaded TEST: X_test={X_test.shape}, y_test={y_test.shape}")
+    # 1) Load Test set
+    X_test = np.load(ART / "embeddings_test_X.npy")
+    y_test = np.load(ART / "embeddings_test_Y.npy")
+    print("Loaded:", X_test.shape, y_test.shape)
 
-    # 3) 모델/체크포인트 로드
-    #    - proj_dim은 학습 때 값과 동일해야 함(기본 256로 학습)
+    in_dim = X_test.shape[1]
+
+    # 2) Load ckpt
     ckpt_path = ART / "best_pn_classifier.pt"
-    if not ckpt_path.exists():
-        raise FileNotFoundError(
-            f"모델 체크포인트를 찾을 수 없습니다: {ckpt_path}\n"
-            "학습 스크립트로 best_pn_classifier.pt를 먼저 생성해 주세요."
-        )
+    ckpt = torch.load(ckpt_path, map_location=DEVICE)
 
-    ckpt = torch.load(ckpt_path, map_location="cpu")
-
-    # 필요시 proj_dim을 ckpt에서 복원 (없으면 256 가정)
     proj_dim = ckpt.get("proj_dim", 256)
-    model_proj = ProjectionHead(in_dim=in_dim, proj_dim=proj_dim)
-    model_clf  = ClassifierHead(proj_dim=proj_dim, num_classes=2)
+
+    # 3) Load ProjectionHead
+    model_proj = ProjectionHead(in_dim=in_dim, proj_dim=proj_dim).to(DEVICE)
     model_proj.load_state_dict(ckpt["proj"])
-    model_clf.load_state_dict(ckpt["clf"])
-    model_proj.eval(); model_clf.eval()
+    model_proj.eval()
 
-    # 4) 예측 & 지표 출력
-    probs, preds = predict(model_proj, model_clf, X_test, device="cpu")
+    # 4) Load prototypes
+    proto_neg = torch.tensor(ckpt["proto_neg"], dtype=torch.float32, device=DEVICE)
+    proto_pos = torch.tensor(ckpt["proto_pos"], dtype=torch.float32, device=DEVICE)
 
+    # optional: normalize proto (usually already normalized by EMA process)
+    proto_neg = proto_neg / (proto_neg.norm() + 1e-12)
+    proto_pos = proto_pos / (proto_pos.norm() + 1e-12)
+
+    # 5) Predict
+    probs, preds = predict(model_proj, proto_neg, proto_pos, X_test, DEVICE)
+
+    # 6) Metrics
     acc = accuracy_score(y_test, preds)
-    prec, rec, f1, _ = precision_recall_fscore_support(
-        y_test, preds, average="binary", pos_label=1
-    )
+    prec, rec, f1, _ = precision_recall_fscore_support(y_test, preds, average="binary")
     cm = confusion_matrix(y_test, preds)
 
-    print("\n[Results]")
+    print("\n[Metrics]")
     print("Accuracy :", f"{acc:.4f}")
-    print("Precision:", f"{prec:.4f} (positive=1)")
-    print("Recall   :", f"{rec:.4f} (positive=1)")
-    print("F1-score :", f"{f1:.4f} (positive=1)")
-    print("\nConfusion Matrix (rows=true, cols=pred):\n", cm)
-    print("\nClassification report:")
-    print(classification_report(y_test, preds, digits=4))
+    print("Precision:", f"{prec:.4f}")
+    print("Recall   :", f"{rec:.4f}")
+    print("F1       :", f"{f1:.4f}")
+    print("CM:\n", cm)
+    print("\nClassification report:\n", classification_report(y_test, preds, digits=4))
 
     try:
         auc = roc_auc_score(y_test, probs[:, 1])
-        print("ROC-AUC  :", f"{auc:.4f}")
-    except Exception:
-        print("ROC-AUC  : 계산 불가(레이블/확률 확인 필요)")
+        print("ROC-AUC:", f"{auc:.4f}")
+    except:
+        print("ROC-AUC 계산 실패")
 
-    # 선택: 결과 저장
-    out = ART / "test_eval_summary.txt"
-    with open(out, "w", encoding="utf-8") as f:
+    # Save summary
+    summary_path = ART / "test_eval_summary.txt"
+    with open(summary_path, "w", encoding="utf-8") as f:
         f.write(f"Accuracy: {acc:.4f}\n")
-        f.write(f"Precision(pos=1): {prec:.4f}\n")
-        f.write(f"Recall(pos=1): {rec:.4f}\n")
-        f.write(f"F1(pos=1): {f1:.4f}\n")
-        try:
-            f.write(f"ROC-AUC: {auc:.4f}\n")
-        except:
-            pass
-        f.write("Confusion Matrix:\n")
+        f.write(f"Precision: {prec:.4f}\n")
+        f.write(f"Recall: {rec:.4f}\n")
+        f.write(f"F1: {f1:.4f}\n")
+        f.write("CM:\n")
         f.write(str(cm) + "\n")
         f.write("\nClassification report:\n")
         f.write(classification_report(y_test, preds, digits=4))
-    print("\n요약 저장:", out)
+
+    print("\nSaved:", summary_path)
+
 
 if __name__ == "__main__":
     main()
-
