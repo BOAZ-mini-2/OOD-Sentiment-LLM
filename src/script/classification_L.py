@@ -17,6 +17,10 @@ LR = 1e-3
 
 # 손실 가중치(λ): Prototype Loss의 세기 (클수록 대표점으로 더 강하게 끌어당김)
 LAMBDA_PL = 4.0
+PROTO_EMA = 0.6
+
+GAMMA = 1.0   # 논문 식의 γ (온도/스케일 역할)
+
 
 # 프로토타입 EMA 계수(0~1): 클수록 과거값 유지, 작을수록 최근 배치 반영↑
 PROTO_EMA = 0.6
@@ -92,6 +96,34 @@ class ClassifierHead(nn.Module):
         return self.fc(fx)
 
 
+def prototype_logits(
+    fx: torch.Tensor,
+    proto_neg: torch.Tensor,
+    proto_pos: torch.Tensor,
+    gamma: float = GAMMA
+) -> torch.Tensor:
+    """
+    논문식:
+      logit_c(x) = -γ * d(x, m_c)
+      d(x, m_c) = ||f(x) - m_c||^2_2
+
+    여기서는 C=2, K=1 (neg/pos 한 개씩) 특수 케이스.
+    """
+    # fx:        (B, D)
+    # proto_neg: (D,)
+    # proto_pos: (D,)
+
+    diff_neg = fx - proto_neg.unsqueeze(0)   # (B, D)
+    diff_pos = fx - proto_pos.unsqueeze(0)   # (B, D)
+
+    dist_neg = (diff_neg ** 2).sum(dim=1)    # (B,)
+    dist_pos = (diff_pos ** 2).sum(dim=1)    # (B,)
+
+    # logits: (B, 2), [0]=neg, [1]=pos
+    logits = torch.stack([-gamma * dist_neg, -gamma * dist_pos], dim=1)
+    return logits
+
+
 # Prototype Loss & EMA 갱신
 def prototype_loss(
     fx: torch.Tensor,
@@ -165,7 +197,7 @@ def train_loop(
             fx = model_proj(X)  # (B, proj_dim)  # 내부에서 L2 정규화까지 수행
 
             # 2) 분류 로짓
-            logits = model_clf(fx)  # (B, 2)
+            logits = prototype_logits(fx, proto_neg, proto_pos, gamma=GAMMA)
 
             # 3) 손실 계산 (CE + λ * PL)
             loss_ce = ce_criterion(logits, y)
