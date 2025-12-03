@@ -41,19 +41,21 @@ def find_artifact_dir(
 class ProjectionHead(nn.Module):
     def __init__(self, in_dim: int, proj_dim: int = 256):
         super().__init__()
-        hidden_dim = 512
         self.net = nn.Sequential(
-            nn.Linear(in_dim, hidden_dim),
+            nn.Linear(in_dim, 2048),
             nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, proj_dim),
+            nn.Linear(2048, 1024),
             nn.ReLU(inplace=True),
-            nn.Linear(proj_dim, proj_dim),
+            nn.Linear(1024, 512),
+            nn.ReLU(inplace=True),
+            nn.Linear(512, proj_dim),
         )
 
     def forward(self, x):
         z = self.net(x)
-        z = z / (z.norm(p=2, dim=1, keepdim=True) + 1e-12)
-        return z
+        # (당시에 L2 정규화도 썼다면)
+        norm = z.norm(p=2, dim=1, keepdim=True) + 1e-12
+        return z / norm
 
 
 # ----------------------------------------
@@ -157,3 +159,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
