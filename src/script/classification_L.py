@@ -15,13 +15,13 @@ EPOCHS = 10
 LR = 1e-3
 
 # 손실 가중치(λ): Prototype Loss의 세기 (클수록 대표점으로 더 강하게 끌어당김)
-LAMBDA_PL = 1.0
+LAMBDA_PL = 3.0
 
 # 프로토타입 EMA 계수(0~1): 클수록 과거값 유지, 작을수록 최근 배치 반영↑
-PROTO_EMA = 0.4
+PROTO_EMA = 0.6
 
 # 논문 식의 γ (온도/스케일 역할)
-GAMMA = 1.0
+GAMMA = 1.5
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -62,42 +62,27 @@ class EmbeddingDataset(Dataset):
 # 모델 정의: ProjectionHead
 # =========================
 class ProjectionHead(nn.Module):
-    def __init__(self, in_dim: int, proj_dim: int = 256):
+    def __init__(self, in_dim: int, proj_dim: int = 512):
         super().__init__()
+
         self.net = nn.Sequential(
-
-            # 1) Wide expansion
-            nn.Linear(in_dim, 4096),
+            nn.Linear(in_dim, 2048),
             nn.GELU(),
-            nn.LayerNorm(4096),
             nn.Dropout(0.1),
-
-            # 2) High-capacity layer
-            nn.Linear(4096, 4096),
-            nn.GELU(),
-            nn.LayerNorm(4096),
-            nn.Dropout(0.1),
-
-            # 3) Begin funneling
-            nn.Linear(4096, 2048),
-            nn.GELU(),
-            nn.LayerNorm(2048),
 
             nn.Linear(2048, 1024),
             nn.GELU(),
-            nn.LayerNorm(1024),
+            nn.Dropout(0.1),
 
-            nn.Linear(1024, 512),
+            nn.Linear(1024, proj_dim),
             nn.GELU(),
-            nn.LayerNorm(512),
-
-            # 4) Final projection
-            nn.Linear(512, proj_dim),   # 256
         )
 
     def forward(self, x):
         z = self.net(x)
-        return z / (z.norm(p=2, dim=1, keepdim=True) + 1e-12)
+        # L2 정규화 (프로토타입 PL·logits의 안정성 유지)
+        norm = z.norm(p=2, dim=1, keepdim=True) + 1e-12
+        return z / norm
 
 
 
