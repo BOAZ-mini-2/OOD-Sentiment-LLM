@@ -39,42 +39,27 @@ def find_artifact_dir(
 # Projection Head (same as training)
 # ----------------------------------------
 class ProjectionHead(nn.Module):
-    def __init__(self, in_dim: int, proj_dim: int = 256):
+    def __init__(self, in_dim: int, proj_dim: int = 512):
         super().__init__()
+
         self.net = nn.Sequential(
-
-            # 1) Wide expansion
-            nn.Linear(in_dim, 4096),
+            nn.Linear(in_dim, 2048),
             nn.GELU(),
-            nn.LayerNorm(4096),
             nn.Dropout(0.1),
-
-            # 2) High-capacity layer
-            nn.Linear(4096, 4096),
-            nn.GELU(),
-            nn.LayerNorm(4096),
-            nn.Dropout(0.1),
-
-            # 3) Begin funneling
-            nn.Linear(4096, 2048),
-            nn.GELU(),
-            nn.LayerNorm(2048),
 
             nn.Linear(2048, 1024),
             nn.GELU(),
-            nn.LayerNorm(1024),
+            nn.Dropout(0.1),
 
-            nn.Linear(1024, 512),
+            nn.Linear(1024, proj_dim),
             nn.GELU(),
-            nn.LayerNorm(512),
-
-            # 4) Final projection
-            nn.Linear(512, proj_dim),   # 256
         )
 
     def forward(self, x):
         z = self.net(x)
-        return z / (z.norm(p=2, dim=1, keepdim=True) + 1e-12)
+        # L2 정규화 (프로토타입 PL·logits의 안정성 유지)
+        norm = z.norm(p=2, dim=1, keepdim=True) + 1e-12
+        return z / norm
 
 
 
@@ -179,6 +164,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
