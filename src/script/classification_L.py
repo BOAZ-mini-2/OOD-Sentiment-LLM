@@ -15,10 +15,10 @@ EPOCHS = 10
 LR = 1e-3
 
 # 손실 가중치(λ): Prototype Loss의 세기 (클수록 대표점으로 더 강하게 끌어당김)
-LAMBDA_PL = 4.0
+LAMBDA_PL = 2.0
 
 # 프로토타입 EMA 계수(0~1): 클수록 과거값 유지, 작을수록 최근 배치 반영↑
-PROTO_EMA = 0.6
+PROTO_EMA = 0.5
 
 # 논문 식의 γ (온도/스케일 역할)
 GAMMA = 1.0
@@ -62,28 +62,27 @@ class EmbeddingDataset(Dataset):
 # 모델 정의: ProjectionHead
 # =========================
 class ProjectionHead(nn.Module):
-    """
-    - 입력 임베딩(예: 1536차원) -> 투영 공간(예: 256차원)으로 변환
-    - 목적: f(x) 공간에서 '응집/분리'가 더 잘 일어나도록 비선형 변환
-    """
-    def __init__(self, in_dim: int, proj_dim: int = 256):
+    def __init__(self, in_dim: int, proj_dim: int = 512):
         super().__init__()
-        hidden_dim = 512
 
         self.net = nn.Sequential(
-            nn.Linear(in_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, proj_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(proj_dim, proj_dim),   # 최종 출력 차원 = proj_dim (예: 256)
+            nn.Linear(in_dim, 2048),
+            nn.GELU(),
+            nn.Dropout(0.1),
+
+            nn.Linear(2048, 1024),
+            nn.GELU(),
+            nn.Dropout(0.1),
+
+            nn.Linear(1024, proj_dim),
+            nn.GELU(),
         )
 
     def forward(self, x):
-        z = self.net(x)  # (B, proj_dim)
-        # L2 정규화
+        z = self.net(x)
+        # L2 정규화 (프로토타입 PL·logits의 안정성 유지)
         norm = z.norm(p=2, dim=1, keepdim=True) + 1e-12
-        z = z / norm
-        return z
+        return z / norm
 
 
 # =========================
@@ -140,6 +139,53 @@ def prototype_loss(
     )
     loss = ((fx - target_proto) ** 2).sum(dim=1).mean()
     return loss
+
+
+@torch.no_grad()
+def init_prototypes_from_data(
+    model_proj: nn.Module,
+    loader: DataLoader,
+    proj_dim: int,
+    device: str = DEVICE,
+):
+    """
+    train_loader 전체를 한 번 훑어서
+    클래스별 평균 f(x)를 초기 프로토타입으로 사용.
+    """
+    model_proj.eval()
+
+    sum_neg = torch.zeros(proj_dim, device=device)
+    sum_pos = torch.zeros(proj_dim, device=device)
+    cnt_neg = 0
+    cnt_pos = 0
+
+    for X, y in loader:
+        X = X.to(device)
+        y = y.to(device)
+
+        fx = model_proj(X)  # (B, proj_dim), L2 norm 포함
+
+        mask_neg = (y == 0)
+        mask_pos = (y == 1)
+
+        if mask_neg.any():
+            sum_neg += fx[mask_neg].sum(dim=0)
+            cnt_neg += int(mask_neg.sum().item())
+
+        if mask_pos.any():
+            sum_pos += fx[mask_pos].sum(dim=0)
+            cnt_pos += int(mask_pos.sum().item())
+
+    # 평균
+    proto_neg = sum_neg / max(cnt_neg, 1)
+    proto_pos = sum_pos / max(cnt_pos, 1)
+
+    # L2 정규화 (f(x)가 이미 정규화된 상태이므로 일관성 맞추기)
+    proto_neg = proto_neg / (proto_neg.norm() + 1e-12)
+    proto_pos = proto_pos / (proto_pos.norm() + 1e-12)
+
+    return proto_neg, proto_pos
+
 
 
 @torch.no_grad()
@@ -374,9 +420,13 @@ def main():
     # 3) 모델 생성
     model_proj = ProjectionHead(in_dim=in_dim, proj_dim=proj_dim).to(DEVICE)
 
-    # 4) 프로토타입 초기화
-    proto_neg = torch.zeros(proj_dim, dtype=torch.float32, device=DEVICE, requires_grad=False)
-    proto_pos = torch.zeros(proj_dim, dtype=torch.float32, device=DEVICE, requires_grad=False)
+    # 4) 프로토타입 초기화: train_loader 전체 평균으로 설정
+    proto_neg, proto_pos = init_prototypes_from_data(
+        model_proj=model_proj,
+        loader=train_loader,
+        proj_dim=proj_dim,
+        device=DEVICE,
+    )
 
     # 5) 학습 루프(CE + λ*PL, 스텝마다 프로토타입 EMA 갱신)
     train_loop(
